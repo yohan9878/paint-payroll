@@ -26,7 +26,9 @@ export interface AttendanceRecord {
   workPlaceId: number; // the site actually worked THAT DAY — may differ from
                         // the employee's default site, and may differ day to day.
   date: string; // YYYY-MM-DD
-  dayType: DayType;
+  dayType: DayType; // day-shift status
+  nightShift?: boolean; // worked a night shift that same day — pays a half day
+                         // on top of the day-shift amount, on ANY day including Saturday.
 }
 
 export interface PayrollRun {
@@ -45,7 +47,9 @@ export interface PayrollDetail {
   fullDays: number;
   halfDays: number;
   absentDays: number;
-  totalAmount: number;
+  nightShiftDays: number; // count of night shifts worked that week
+  nightShiftAmount: number; // total pay from night shifts (each = half a day's rate)
+  totalAmount: number; // day-shift pay + night-shift pay combined
 }
 
 class PayrollDB extends Dexie {

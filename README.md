@@ -14,7 +14,11 @@ after first load.
 - An employee can work different sites on different days within the same week —
   the attendance screen lets you pick "site worked today" and mark anyone
   against it, regardless of their default site.
-- Saturday is treated as a half day (8am–1pm) and pays half the employee's daily rate.
+- Every day (Mon–Sat, including Saturday) can be marked Full day, Half day, or
+  Absent — Saturday is no longer automatically treated as a half day.
+- Every day can also have a **night shift** toggled on independently — it pays
+  a flat half day's rate on top of whatever the day shift paid, and can apply
+  even if the employee was absent during the day.
 - All data is stored locally on the phone using IndexedDB (via Dexie.js). Nothing
   leaves the device.
 - Because browsers can occasionally clear site data under low storage, **export
@@ -95,11 +99,11 @@ public/
 
 ## Adjusting the payroll rule
 
-The core calculation lives in `lib/payroll.ts` — `amountForDay()`. Right now:
+The core calculation lives in `lib/payroll.ts`:
 
-- `FULL` → full daily rate
-- `HALF` → half the daily rate (used for Saturday)
-- `ABSENT` → 0
+- `amountForDay()` — day-shift pay: `FULL` → full daily rate, `HALF` → half the
+  daily rate, `ABSENT` → 0. Applies the same way to every day, including Saturday.
+- `nightShiftPay()` — adds a flat half day's rate on top, if that day's night
+  shift is toggled on. Independent of the day-shift status.
 
-If pay rules ever change (e.g. overtime, different Saturday hours), that's the
-one place to edit.
+If pay rules ever change again, those are the two places to edit.

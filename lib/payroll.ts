@@ -1,7 +1,9 @@
 import { db, type AttendanceRecord, type DayType, type Employee } from "./db";
 import { toDateStr, weekDays } from "./date";
 
-// Saturday is a half day (8am-1pm), so it pays half the normal daily rate.
+// Day-shift pay. Saturday is treated the same as any other day now (no
+// automatic halving) — whatever the manager marks (Full/Half/Absent) is
+// what's paid for that day.
 export function amountForDay(dayType: DayType, dailyRate: number): number {
   switch (dayType) {
     case "FULL":
@@ -14,11 +16,19 @@ export function amountForDay(dayType: DayType, dailyRate: number): number {
   }
 }
 
+// Night shift pays a flat half day's rate, on top of whatever the day-shift
+// paid, and is available on any working day (Mon-Sat).
+export function nightShiftPay(nightShift: boolean | undefined, dailyRate: number): number {
+  return nightShift ? dailyRate / 2 : 0;
+}
+
 export interface EmployeeWeekSummary {
   employee: Employee;
   fullDays: number;
   halfDays: number;
   absentDays: number;
+  nightShiftDays: number;
+  nightShiftAmount: number;
   totalAmount: number;
   records: AttendanceRecord[];
 }
@@ -41,6 +51,8 @@ export async function computeEmployeeWeek(
   let fullDays = 0;
   let halfDays = 0;
   let absentDays = 0;
+  let nightShiftDays = 0;
+  let nightShiftAmount = 0;
   let totalAmount = 0;
 
   for (const dateStr of dateStrs) {
@@ -50,7 +62,23 @@ export async function computeEmployeeWeek(
     else if (dayType === "HALF") halfDays++;
     else absentDays++;
     totalAmount += amountForDay(dayType, employee.dailyRate);
+
+    if (rec?.nightShift) {
+      nightShiftDays++;
+      const pay = nightShiftPay(true, employee.dailyRate);
+      nightShiftAmount += pay;
+      totalAmount += pay;
+    }
   }
 
-  return { employee, fullDays, halfDays, absentDays, totalAmount, records };
+  return {
+    employee,
+    fullDays,
+    halfDays,
+    absentDays,
+    nightShiftDays,
+    nightShiftAmount,
+    totalAmount,
+    records,
+  };
 }

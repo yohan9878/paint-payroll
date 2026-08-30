@@ -5,7 +5,7 @@ import NavBar from "@/components/NavBar";
 import SwRegister from "@/components/SwRegister";
 
 export const metadata: Metadata = {
-  title: "Paint Co Payroll",
+  title: "Doctor Paint Payroll",
   description: "Weekly attendance & payroll for site employees",
   manifest: "/manifest.json",
   appleWebApp: {

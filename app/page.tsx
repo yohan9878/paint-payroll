@@ -20,10 +20,20 @@ export default function Home() {
   return (
     <div className="page">
       <div className="eyebrow">{formatNice(todayDate)}</div>
-      <h1>Paint Co Payroll</h1>
+      <img
+        src="/logo.jpg"
+        alt="Doctor Paint"
+        style={{
+          height: 96,
+          width: 96,
+          borderRadius: "var(--radius-md)",
+          marginBottom: 10,
+          display: "block",
+        }}
+      />
       <p style={{ color: "var(--color-ink-soft)", marginTop: 0 }}>
         {saturdayToday
-          ? "It's Saturday — half day. Wrap up attendance, then generate this week's payroll."
+          ? "It's Saturday — wrap up attendance (don't forget any night shifts), then generate this week's payroll."
           : "Mark today's attendance for each work site."}
       </p>
 

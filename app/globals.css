@@ -14,6 +14,7 @@
   --color-full: #2f6f6f;
   --color-half: #c8963e;
   --color-empty: #d8cfba;
+  --color-night: #3d4f8f; /* indigo, distinct from day-shift colors */
 
   --radius-sm: 8px;
   --radius-md: 14px;
@@ -169,6 +170,32 @@ label {
 .swatch.absent {
   border-color: var(--color-absent);
   opacity: 0.5;
+}
+
+.swatch.night {
+  background: var(--color-night);
+  border-color: var(--color-night);
+}
+
+.night-toggle {
+  appearance: none;
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+  cursor: pointer;
+  margin: 0 auto;
+  display: block;
+}
+
+.night-toggle.active {
+  background: var(--color-night);
+  border-color: var(--color-night);
+  color: white;
 }
 
 .tabular {
