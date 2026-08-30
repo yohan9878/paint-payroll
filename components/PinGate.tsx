@@ -45,11 +45,23 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
     return (
       <div className="page">
         <div className="card">
+          <img
+            src="/logo.jpg"
+            alt="Doctor Paint"
+            style={{
+              height: 96,
+              width: 96,
+              borderRadius: "var(--radius-md)",
+              marginBottom: 10,
+              display: "block",
+            }}
+          />
           <div className="eyebrow">One-time setup</div>
           <h2>Set a PIN for this app</h2>
           <p style={{ color: "var(--color-ink-soft)", fontSize: 14 }}>
-            This app stores wages and salary data on this phone. A PIN keeps it private if
-            someone else picks up your phone. You can skip this, but it's not recommended.
+            This app stores wages and salary data on this phone. A PIN keeps it
+            private if someone else picks up your phone. You can skip this, but
+            it's not recommended.
           </p>
           <div className="field">
             <label>4-digit PIN</label>
@@ -62,7 +74,11 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
               placeholder="••••"
             />
           </div>
-          {error && <p style={{ color: "var(--color-absent)", fontSize: 13 }}>{error}</p>}
+          {error && (
+            <p style={{ color: "var(--color-absent)", fontSize: 13 }}>
+              {error}
+            </p>
+          )}
           <div className="row" style={{ gap: 8 }}>
             <button
               className="btn secondary"
@@ -98,6 +114,31 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
   return (
     <div className="page">
       <div className="card" style={{ marginTop: 60 }}>
+        <div
+          className="image"
+          style={{
+            justifyContent: "center",
+            alignContent: "center",
+            padding: 10,
+          }}
+        >
+          <img
+            src="/logo.jpg"
+            alt="Doctor Paint"
+            style={{
+              height: 96,
+              width: 96,
+              borderRadius: "var(--radius-md)",
+              marginBottom: 10,
+              display: "block",
+            }}
+          />
+          <p className="eyebrow" style={{
+            fontWeight: "bold",
+            color: "black",
+            fontSize: 24
+          }}>DOCTOR PAINT PAYROLL</p>
+        </div>
         <div className="eyebrow">Locked</div>
         <h2>Enter your PIN</h2>
         <div className="field">
@@ -111,7 +152,9 @@ export default function PinGate({ children }: { children: React.ReactNode }) {
             placeholder="••••"
           />
         </div>
-        {error && <p style={{ color: "var(--color-absent)", fontSize: 13 }}>{error}</p>}
+        {error && (
+          <p style={{ color: "var(--color-absent)", fontSize: 13 }}>{error}</p>
+        )}
         <button
           className="btn block"
           onClick={() => {
