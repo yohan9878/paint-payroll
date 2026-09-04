@@ -1,4 +1,4 @@
-import { db, type AttendanceRecord, type DayType, type Employee } from "./db";
+import { db, type AttendanceRecord, type DayType, type Employee, type WorkPlace } from "./db";
 import { toDateStr, weekDays } from "./date";
 
 // Day-shift pay. Saturday is treated the same as any other day now (no
@@ -81,4 +81,37 @@ export async function computeEmployeeWeek(
     totalAmount,
     records,
   };
+}
+
+export interface SiteTotal {
+  siteId: number;
+  siteName: string;
+  total: number;
+}
+
+// Categorizes a week's pay by work site — each attendance record's pay
+// (day-shift + night-shift) is credited to whichever site it was actually
+// worked at that day, so an employee who split their week across sites
+// contributes to each site's total correctly.
+export function siteTotalsFromSummaries(
+  summaries: EmployeeWeekSummary[],
+  workplaces: WorkPlace[]
+): SiteTotal[] {
+  const totals = new Map<number, number>();
+
+  for (const s of summaries) {
+    for (const rec of s.records) {
+      const amount = amountForDay(rec.dayType, s.employee.dailyRate) + nightShiftPay(rec.nightShift, s.employee.dailyRate);
+      if (amount <= 0) continue;
+      totals.set(rec.workPlaceId, (totals.get(rec.workPlaceId) ?? 0) + amount);
+    }
+  }
+
+  return Array.from(totals.entries())
+    .map(([siteId, total]) => ({
+      siteId,
+      siteName: workplaces.find((w) => w.id === siteId)?.name ?? "Unknown site",
+      total,
+    }))
+    .sort((a, b) => b.total - a.total);
 }

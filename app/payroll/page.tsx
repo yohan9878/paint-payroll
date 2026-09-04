@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, type WorkPlace, type PayrollDetail } from "@/lib/db";
 import { toDateStr, weekEndingSaturday, formatNice, weekRangeFromSaturday } from "@/lib/date";
-import { computeEmployeeWeek, type EmployeeWeekSummary } from "@/lib/payroll";
+import { computeEmployeeWeek, siteTotalsFromSummaries, amountForDay, nightShiftPay, type EmployeeWeekSummary, type SiteTotal } from "@/lib/payroll";
 import { downloadPayslip, downloadAllPayslips, type PayslipData } from "@/lib/payslip";
 import Link from "next/link";
 
@@ -117,6 +117,16 @@ export default function PayrollPage() {
             </div>
           </div>
 
+          <div className="card">
+            <div className="eyebrow" style={{ marginBottom: 10 }}>Cost by site</div>
+            {siteTotalsFromSummaries(preview, workplaces ?? []).map((st) => (
+              <div className="row" key={st.siteId} style={{ marginTop: 6 }}>
+                <span>{st.siteName}</span>
+                <span className="money">Rs {st.total.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+
           {preview.map((s) => (
             <div className="card" key={s.employee.id}>
               <div className="row">
@@ -174,21 +184,44 @@ function PastRunCard({
   const [open, setOpen] = useState(false);
   const total = details?.reduce((sum, d) => sum + d.totalAmount, 0) ?? 0;
 
-  // Recompute which sites each employee actually worked that week, straight
-  // from attendance records (payroll details themselves don't store this).
-  const siteMap = useLiveQuery(async () => {
-    if (!details || details.length === 0) return {} as Record<number, string>;
-    const map: Record<number, string> = {};
+  // Recompute which sites each employee worked, AND each site's total cost
+  // for the week, straight from attendance records — payroll details don't
+  // store this breakdown themselves. Uses the RATE SNAPSHOT saved on each
+  // detail (d.dailyRate), not the employee's current rate, so historical
+  // slips stay accurate even if rates changed since.
+  const siteData = useLiveQuery(async () => {
+    const empty = { namesByEmployee: {} as Record<number, string>, siteTotals: [] as SiteTotal[] };
+    if (!details || details.length === 0) return empty;
+
+    const namesByEmployee: Record<number, string> = {};
+    const totalsMap = new Map<number, number>();
+
     for (const d of details) {
       const records = await db.attendance
         .where("employeeId")
         .equals(d.employeeId)
-        .filter((r) => r.date >= weekStart && r.date <= weekEnd && r.dayType !== "ABSENT")
+        .filter((r) => r.date >= weekStart && r.date <= weekEnd)
         .toArray();
-      const ids = Array.from(new Set(records.map((r) => r.workPlaceId)));
-      map[d.employeeId] = ids.map((id) => workplaces.find((w) => w.id === id)?.name).filter(Boolean).join(", ") || "—";
+
+      const workedIds = new Set<number>();
+      for (const r of records) {
+        const amount = amountForDay(r.dayType, d.dailyRate) + nightShiftPay(r.nightShift, d.dailyRate);
+        if (amount <= 0) continue;
+        workedIds.add(r.workPlaceId);
+        totalsMap.set(r.workPlaceId, (totalsMap.get(r.workPlaceId) ?? 0) + amount);
+      }
+      namesByEmployee[d.employeeId] = Array.from(workedIds).map((id) => workplaces.find((w) => w.id === id)?.name).filter(Boolean).join(", ") || "—";
     }
-    return map;
+
+    const siteTotals: SiteTotal[] = Array.from(totalsMap.entries())
+      .map(([siteId, total]) => ({
+        siteId,
+        siteName: workplaces.find((w) => w.id === siteId)?.name ?? "Unknown site",
+        total,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    return { namesByEmployee, siteTotals };
   }, [details, weekStart, weekEnd, workplaces]);
 
   function exportJson() {
@@ -214,7 +247,7 @@ function PastRunCard({
       nightShiftDays: d.nightShiftDays,
       nightShiftAmount: d.nightShiftAmount,
       totalAmount: d.totalAmount,
-      sitesWorked: siteMap?.[d.employeeId],
+      sitesWorked: siteData?.namesByEmployee[d.employeeId],
     };
   }
 
@@ -237,6 +270,17 @@ function PastRunCard({
       </div>
       {open && (
         <>
+          {(siteData?.siteTotals?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 12, marginBottom: 4, padding: 10, background: "var(--color-bg)", borderRadius: "var(--radius-sm)" }}>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Cost by site</div>
+              {siteData!.siteTotals.map((st) => (
+                <div className="row" key={st.siteId} style={{ marginTop: 4, fontSize: 13 }}>
+                  <span>{st.siteName}</span>
+                  <span className="tabular">Rs {st.total.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {details?.map((d) => (
             <div key={d.id} className="row" style={{ marginTop: 10, fontSize: 14 }}>
               <span>{d.employeeName}</span>
