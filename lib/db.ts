@@ -11,7 +11,8 @@ export interface Employee {
   id?: number;
   workPlaceId: number; // default/home site — used for grouping & suggestions only,
                         // NOT a restriction. An employee can be marked present at
-                        // any site on any given day (see AttendanceRecord.workPlaceId).
+                        // any site on any given day (see AttendanceRecord.daySiteId
+                        // and .nightSiteId).
   name: string;
   dailyRate: number; // rate for a FULL day
   active: boolean;
@@ -23,12 +24,13 @@ export type DayType = "FULL" | "HALF" | "ABSENT";
 export interface AttendanceRecord {
   id?: number;
   employeeId: number;
-  workPlaceId: number; // the site actually worked THAT DAY — may differ from
-                        // the employee's default site, and may differ day to day.
+  daySiteId: number; // site worked for the DAY shift (Full/Half/Absent) that day
   date: string; // YYYY-MM-DD
   dayType: DayType; // day-shift status
   nightShift?: boolean; // worked a night shift that same day — pays a half day
                          // on top of the day-shift amount, on ANY day including Saturday.
+  nightSiteId?: number; // site worked for the NIGHT shift — independent of daySiteId,
+                         // since someone can work days at one site and nights at another.
 }
 
 export interface PayrollRun {
@@ -82,6 +84,33 @@ class PayrollDB extends Dexie {
       payrollRuns: "++id, weekStart, weekEnd",
       payrollDetails: "++id, payrollRunId, employeeId",
     });
+
+    // v3: an employee's night shift can be at a DIFFERENT site than their day
+    // shift, so attendance.workPlaceId splits into daySiteId + nightSiteId.
+    // Existing attendance rows are migrated: their old workPlaceId becomes
+    // daySiteId, and also nightSiteId if they already had a night shift on.
+    this.version(3)
+      .stores({
+        workplaces: "++id, name",
+        employees: "++id, workPlaceId, name, active",
+        attendance: "++id, employeeId, daySiteId, date, [employeeId+date]",
+        payrollRuns: "++id, weekStart, weekEnd",
+        payrollDetails: "++id, payrollRunId, employeeId",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("attendance")
+          .toCollection()
+          .modify((rec: any) => {
+            if (rec.workPlaceId !== undefined && rec.daySiteId === undefined) {
+              rec.daySiteId = rec.workPlaceId;
+              if (rec.nightShift && rec.nightSiteId === undefined) {
+                rec.nightSiteId = rec.workPlaceId;
+              }
+              delete rec.workPlaceId;
+            }
+          });
+      });
   }
 }
 

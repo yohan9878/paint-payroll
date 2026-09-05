@@ -72,36 +72,52 @@ export default function AttendancePage() {
       return;
     }
     if (existing) {
-      // Update status, and refresh which site it was worked at (in case
+      // Update status, and refresh which site the DAY shift was at (in case
       // today's selected site is different from what was saved before).
-      await db.attendance.update(existing.id!, { dayType, workPlaceId: siteId });
+      // Night shift's own site is left untouched.
+      await db.attendance.update(existing.id!, { dayType, daySiteId: siteId });
     } else {
       await db.attendance.add({
         employeeId,
-        workPlaceId: siteId,
+        daySiteId: siteId,
         date: dateStr,
         dayType,
       });
     }
   }
 
-  // Night shift is independent of day-shift status — it can be toggled even
-  // if the employee was absent during the day, or on top of a full/half day.
-  async function toggleNightShift(employeeId: number, dateStr: string, siteId: number) {
+  // Night shift is independent of day-shift status AND can be at a different
+  // site — e.g. day shift at Site A, night shift at Site B.
+  async function toggleNightShift(employeeId: number, dateStr: string, defaultSiteId: number) {
     const existing = await db.attendance
       .where("[employeeId+date]")
       .equals([employeeId, dateStr])
       .first();
     if (existing) {
-      await db.attendance.update(existing.id!, { nightShift: !existing.nightShift });
+      const turningOn = !existing.nightShift;
+      await db.attendance.update(existing.id!, {
+        nightShift: turningOn,
+        nightSiteId: turningOn ? existing.nightSiteId ?? defaultSiteId : existing.nightSiteId,
+      });
     } else {
       await db.attendance.add({
         employeeId,
-        workPlaceId: siteId,
+        daySiteId: defaultSiteId,
         date: dateStr,
         dayType: "ABSENT",
         nightShift: true,
+        nightSiteId: defaultSiteId,
       });
+    }
+  }
+
+  async function setNightSite(employeeId: number, dateStr: string, siteId: number) {
+    const existing = await db.attendance
+      .where("[employeeId+date]")
+      .equals([employeeId, dateStr])
+      .first();
+    if (existing) {
+      await db.attendance.update(existing.id!, { nightSiteId: siteId });
     }
   }
 
@@ -134,7 +150,7 @@ export default function AttendancePage() {
 
       <div className="card">
         <div className="field">
-          <label>Site worked today</label>
+          <label>Day shift site (default for today)</label>
           <select value={workPlaceId} onChange={(e) => setWorkPlaceId(e.target.value)}>
             {workplaces?.map((w) => (
               <option key={w.id} value={w.id}>
@@ -143,8 +159,8 @@ export default function AttendancePage() {
             ))}
           </select>
           <div style={{ fontSize: 12, color: "var(--color-ink-soft)", marginTop: 4 }}>
-            Employees can be marked here even if this isn't their default site —
-            useful when someone's working a different job this week.
+            Used for day-shift (F/H/A) marks below. Night shift can be set to a
+            different site per employee — see the "N" column.
           </div>
         </div>
         <div className="field" style={{ marginBottom: 0 }}>
@@ -168,7 +184,7 @@ export default function AttendancePage() {
         <>
           {/* ---- Daily entry table ---- */}
           <div className="eyebrow" style={{ marginTop: 4 }}>
-            Today's entry — at {siteName(Number(workPlaceId)) || "selected site"}
+            Today's entry — day shift at {siteName(Number(workPlaceId)) || "selected site"}
           </div>
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             <table className="attendance-table">
@@ -179,7 +195,7 @@ export default function AttendancePage() {
                   <th>F</th>
                   <th>H</th>
                   <th>A</th>
-                  <th>N</th>
+                  <th>Night shift</th>
                 </tr>
               </thead>
               <tbody>
@@ -187,16 +203,16 @@ export default function AttendancePage() {
                   const rec = dayRecords?.find((r) => r.employeeId === emp.id);
                   const current: DayType | null = rec?.dayType ?? null;
                   const nightOn = !!rec?.nightShift;
-                  // If this employee already has a record today at a DIFFERENT
-                  // site, flag it so the manager doesn't accidentally double-mark them.
-                  const markedElsewhere = rec && rec.workPlaceId !== Number(workPlaceId);
+                  // If this employee already has a DAY shift recorded today at a
+                  // DIFFERENT site, flag it so the manager doesn't double-mark them.
+                  const markedElsewhere = rec && rec.dayType !== "ABSENT" && rec.daySiteId !== Number(workPlaceId);
                   return (
                     <tr key={emp.id}>
                       <td>
                         {emp.name}
                         {markedElsewhere && (
                           <div style={{ fontSize: 10, color: "var(--color-absent)", fontWeight: 700 }}>
-                            already marked at {siteName(rec!.workPlaceId)} today
+                            already marked at {siteName(rec!.daySiteId)} today
                           </div>
                         )}
                         {!rec && emp.workPlaceId !== Number(workPlaceId) && (
@@ -215,10 +231,36 @@ export default function AttendancePage() {
                       <td onClick={() => setDayType(emp.id!, date, Number(workPlaceId), "ABSENT")}>
                         <span className={`swatch ${current === "ABSENT" ? "absent" : ""}`} style={{ margin: "0 auto" }} />
                       </td>
-                      <td onClick={() => toggleNightShift(emp.id!, date, Number(workPlaceId))}>
-                        <button className={`night-toggle ${nightOn ? "active" : ""}`} type="button">
-                          N
-                        </button>
+                      <td>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                          <button
+                            className={`night-toggle ${nightOn ? "active" : ""}`}
+                            type="button"
+                            onClick={() => toggleNightShift(emp.id!, date, Number(workPlaceId))}
+                          >
+                            N
+                          </button>
+                          {nightOn && (
+                            <select
+                              value={rec?.nightSiteId ?? Number(workPlaceId)}
+                              onChange={(e) => setNightSite(emp.id!, date, Number(e.target.value))}
+                              style={{
+                                fontSize: 10,
+                                padding: "2px 4px",
+                                minHeight: "auto",
+                                border: "1px solid var(--color-border)",
+                                borderRadius: 5,
+                                background: "var(--color-surface)",
+                              }}
+                            >
+                              {workplaces?.map((w) => (
+                                <option key={w.id} value={w.id}>
+                                  {w.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -227,8 +269,9 @@ export default function AttendancePage() {
             </table>
           </div>
           <div style={{ fontSize: 12, color: "var(--color-ink-soft)", marginBottom: 20 }}>
-            F = full day, H = half day, A = absent, N = night shift (pays a half day extra,
-            on top of the day shift — can apply on any day, including Saturday).
+            F = full day, H = half day, A = absent. Tap N for a night shift (pays half a
+            day extra) — a site dropdown appears so you can set it to a different site
+            than the day shift, e.g. day at Site A, night at Site B.
           </div>
 
           {/* ---- Weekly overview table (company-wide, across all sites) ---- */}
@@ -257,12 +300,18 @@ export default function AttendancePage() {
                     const dt: DayType | null = rec?.dayType ?? null;
                     weekTotal += amountForDay(dt ?? "ABSENT", emp.dailyRate);
                     weekTotal += nightShiftPay(rec?.nightShift, emp.dailyRate);
-                    return { ds, dt, siteId: rec?.workPlaceId, nightShift: !!rec?.nightShift };
+                    return {
+                      ds,
+                      dt,
+                      daySiteId: rec?.daySiteId,
+                      nightShift: !!rec?.nightShift,
+                      nightSiteId: rec?.nightSiteId,
+                    };
                   });
                   return (
                     <tr key={emp.id}>
                       <td style={{ textAlign: "left" }}>{emp.name}</td>
-                      {cells.map(({ ds, dt, siteId, nightShift }) => (
+                      {cells.map(({ ds, dt, daySiteId, nightShift, nightSiteId }) => (
                         <td
                           key={ds}
                           onClick={() => setDayType(emp.id!, ds, Number(workPlaceId), cycleNext(dt))}
@@ -272,9 +321,9 @@ export default function AttendancePage() {
                             className={`swatch ${dt === "FULL" ? "full" : dt === "HALF" ? "half" : dt === "ABSENT" ? "absent" : ""}`}
                             style={{ width: 20, height: 20, margin: "0 auto" }}
                           />
-                          {dt && dt !== "ABSENT" && siteId && (
+                          {dt && dt !== "ABSENT" && daySiteId && (
                             <div style={{ fontSize: 8, color: "var(--color-ink-soft)", marginTop: 2 }}>
-                              {siteShort(siteId)}
+                              {siteShort(daySiteId)}
                             </div>
                           )}
                           <div
@@ -282,6 +331,7 @@ export default function AttendancePage() {
                               e.stopPropagation();
                               toggleNightShift(emp.id!, ds, Number(workPlaceId));
                             }}
+                            title={nightShift ? `Night at ${siteName(nightSiteId)}` : "Toggle night shift"}
                             style={{
                               fontSize: 8,
                               fontWeight: 700,
@@ -294,7 +344,7 @@ export default function AttendancePage() {
                               cursor: "pointer",
                             }}
                           >
-                            N
+                            {nightShift ? `N·${siteShort(nightSiteId)}` : "N"}
                           </div>
                         </td>
                       ))}
@@ -306,9 +356,9 @@ export default function AttendancePage() {
             </table>
           </div>
           <div style={{ fontSize: 12, color: "var(--color-ink-soft)", marginTop: 8, marginBottom: 20 }}>
-            Tap a day cell to cycle: blank → full → half → absent → blank (uses the site
-            selected above). Tap the "N" tag under any day — Monday through Saturday — to
-            turn that day's night shift on or off.
+            Tap a day cell to cycle: blank → full → half → absent → blank. Tap the "N" tag
+            to toggle that day's night shift on/off — its site defaults to the day-shift
+            site above; change it per-employee from the daily entry table.
           </div>
         </>
       )}

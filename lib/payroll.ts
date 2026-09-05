@@ -1,4 +1,4 @@
-import { db, type AttendanceRecord, type DayType, type Employee } from "./db";
+import { db, type AttendanceRecord, type DayType, type Employee, type WorkPlace } from "./db";
 import { toDateStr, weekDays } from "./date";
 
 // Day-shift pay. Saturday is treated the same as any other day now (no
@@ -17,7 +17,8 @@ export function amountForDay(dayType: DayType, dailyRate: number): number {
 }
 
 // Night shift pays a flat half day's rate, on top of whatever the day-shift
-// paid, and is available on any working day (Mon-Sat).
+// paid, and is available on any working day (Mon-Sat) — and may be at a
+// DIFFERENT site than the day shift.
 export function nightShiftPay(nightShift: boolean | undefined, dailyRate: number): number {
   return nightShift ? dailyRate / 2 : 0;
 }
@@ -81,4 +82,66 @@ export async function computeEmployeeWeek(
     totalAmount,
     records,
   };
+}
+
+// ---- Site cost breakdown (day-shift and night-shift may be at DIFFERENT
+// sites for the same attendance record, so each is attributed separately) ----
+
+export interface SiteTotal {
+  siteId: number;
+  siteName: string;
+  fullDays: number;
+  halfDays: number;
+  nightShifts: number;
+  total: number;
+}
+
+function siteNameLookup(workplaces: WorkPlace[]): Map<number, string> {
+  return new Map(workplaces.map((w) => [w.id!, w.name]));
+}
+
+// Core aggregator: given (record, rate) pairs, attribute day-shift pay to
+// daySiteId and night-shift pay to nightSiteId (falling back to daySiteId if
+// a night shift somehow has no site of its own — e.g. legacy data).
+export function siteTotalsFromRecords(
+  entries: { record: AttendanceRecord; dailyRate: number }[],
+  workplaces: WorkPlace[]
+): SiteTotal[] {
+  const names = siteNameLookup(workplaces);
+  const bySite = new Map<number, SiteTotal>();
+
+  function ensure(id: number): SiteTotal {
+    let s = bySite.get(id);
+    if (!s) {
+      s = { siteId: id, siteName: names.get(id) ?? "Unknown site", fullDays: 0, halfDays: 0, nightShifts: 0, total: 0 };
+      bySite.set(id, s);
+    }
+    return s;
+  }
+
+  for (const { record: rec, dailyRate } of entries) {
+    if (rec.dayType !== "ABSENT" && rec.daySiteId) {
+      const s = ensure(rec.daySiteId);
+      if (rec.dayType === "FULL") s.fullDays++;
+      else s.halfDays++;
+      s.total += amountForDay(rec.dayType, dailyRate);
+    }
+    if (rec.nightShift) {
+      const nightSiteId = rec.nightSiteId ?? rec.daySiteId;
+      if (nightSiteId) {
+        const s = ensure(nightSiteId);
+        s.nightShifts++;
+        s.total += nightShiftPay(true, dailyRate);
+      }
+    }
+  }
+
+  return Array.from(bySite.values()).sort((a, b) => b.total - a.total);
+}
+
+// Convenience wrapper for the live preview, where we already have each
+// employee's EmployeeWeekSummary (with .records) in memory — no extra DB hit.
+export function siteTotalsFromSummaries(summaries: EmployeeWeekSummary[], workplaces: WorkPlace[]): SiteTotal[] {
+  const entries = summaries.flatMap((s) => s.records.map((record) => ({ record, dailyRate: s.employee.dailyRate })));
+  return siteTotalsFromRecords(entries, workplaces);
 }

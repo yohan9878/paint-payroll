@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, type WorkPlace, type PayrollDetail } from "@/lib/db";
+import { db, type WorkPlace, type PayrollDetail, type AttendanceRecord } from "@/lib/db";
 import { toDateStr, weekEndingSaturday, formatNice, weekRangeFromSaturday } from "@/lib/date";
-import { computeEmployeeWeek, type EmployeeWeekSummary } from "@/lib/payroll";
+import { computeEmployeeWeek, siteTotalsFromSummaries, siteTotalsFromRecords, type EmployeeWeekSummary, type SiteTotal } from "@/lib/payroll";
 import { downloadPayslip, downloadAllPayslips, type PayslipData } from "@/lib/payslip";
 import Link from "next/link";
 
@@ -62,9 +62,13 @@ export default function PayrollPage() {
   }
 
   function sitesWorked(s: EmployeeWeekSummary): string {
-    const ids = Array.from(new Set(s.records.filter((r) => r.dayType !== "ABSENT").map((r) => r.workPlaceId)));
-    if (ids.length === 0) return "No days worked";
-    return ids.map((id) => siteName(id)).filter(Boolean).join(", ");
+    const ids = new Set<number>();
+    for (const r of s.records) {
+      if (r.dayType !== "ABSENT" && r.daySiteId) ids.add(r.daySiteId);
+      if (r.nightShift) ids.add(r.nightSiteId ?? r.daySiteId);
+    }
+    if (ids.size === 0) return "No days worked";
+    return Array.from(ids).map((id) => siteName(id)).filter(Boolean).join(", ");
   }
 
   const total = preview?.reduce((sum, s) => sum + s.totalAmount, 0) ?? 0;
@@ -115,6 +119,21 @@ export default function PayrollPage() {
               <div className="eyebrow">Total payout</div>
               <div className="money" style={{ fontSize: 20 }}>Rs {total.toLocaleString()}</div>
             </div>
+          </div>
+
+          <div className="card">
+            <div className="eyebrow" style={{ marginBottom: 10 }}>Cost by site</div>
+            {siteTotalsFromSummaries(preview, workplaces ?? []).map((st) => (
+              <div key={st.siteId} style={{ marginTop: 10 }}>
+                <div className="row">
+                  <span>{st.siteName}</span>
+                  <span className="money">Rs {st.total.toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: 11, color: "var(--color-ink-soft)", marginTop: 2 }}>
+                  {st.fullDays} full · {st.halfDays} half · {st.nightShifts} night
+                </div>
+              </div>
+            ))}
           </div>
 
           {preview.map((s) => (
@@ -174,21 +193,37 @@ function PastRunCard({
   const [open, setOpen] = useState(false);
   const total = details?.reduce((sum, d) => sum + d.totalAmount, 0) ?? 0;
 
-  // Recompute which sites each employee actually worked that week, straight
-  // from attendance records (payroll details themselves don't store this).
-  const siteMap = useLiveQuery(async () => {
-    if (!details || details.length === 0) return {} as Record<number, string>;
-    const map: Record<number, string> = {};
+  // Recompute which sites each employee worked, AND each site's total cost
+  // for the week, straight from attendance records — payroll details don't
+  // store this breakdown themselves. Uses the RATE SNAPSHOT saved on each
+  // detail (d.dailyRate), not the employee's current rate, so historical
+  // slips stay accurate even if rates changed since. Day shift and night
+  // shift are attributed to their own sites separately (they may differ).
+  const siteData = useLiveQuery(async () => {
+    const empty = { namesByEmployee: {} as Record<number, string>, siteTotals: [] as SiteTotal[] };
+    if (!details || details.length === 0) return empty;
+
+    const namesByEmployee: Record<number, string> = {};
+    const entries: { record: AttendanceRecord; dailyRate: number }[] = [];
+
     for (const d of details) {
       const records = await db.attendance
         .where("employeeId")
         .equals(d.employeeId)
-        .filter((r) => r.date >= weekStart && r.date <= weekEnd && r.dayType !== "ABSENT")
+        .filter((r) => r.date >= weekStart && r.date <= weekEnd)
         .toArray();
-      const ids = Array.from(new Set(records.map((r) => r.workPlaceId)));
-      map[d.employeeId] = ids.map((id) => workplaces.find((w) => w.id === id)?.name).filter(Boolean).join(", ") || "—";
+
+      const workedIds = new Set<number>();
+      for (const r of records) {
+        if (r.dayType !== "ABSENT" && r.daySiteId) workedIds.add(r.daySiteId);
+        if (r.nightShift) workedIds.add(r.nightSiteId ?? r.daySiteId);
+        entries.push({ record: r, dailyRate: d.dailyRate });
+      }
+      namesByEmployee[d.employeeId] = Array.from(workedIds).map((id) => workplaces.find((w) => w.id === id)?.name).filter(Boolean).join(", ") || "—";
     }
-    return map;
+
+    const siteTotals = siteTotalsFromRecords(entries, workplaces);
+    return { namesByEmployee, siteTotals };
   }, [details, weekStart, weekEnd, workplaces]);
 
   function exportJson() {
@@ -214,7 +249,7 @@ function PastRunCard({
       nightShiftDays: d.nightShiftDays,
       nightShiftAmount: d.nightShiftAmount,
       totalAmount: d.totalAmount,
-      sitesWorked: siteMap?.[d.employeeId],
+      sitesWorked: siteData?.namesByEmployee[d.employeeId],
     };
   }
 
@@ -237,6 +272,22 @@ function PastRunCard({
       </div>
       {open && (
         <>
+          {(siteData?.siteTotals?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 12, marginBottom: 4, padding: 10, background: "var(--color-bg)", borderRadius: "var(--radius-sm)" }}>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Cost by site</div>
+              {siteData!.siteTotals.map((st) => (
+                <div key={st.siteId} style={{ marginTop: 8 }}>
+                  <div className="row" style={{ fontSize: 13 }}>
+                    <span>{st.siteName}</span>
+                    <span className="tabular">Rs {st.total.toLocaleString()}</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--color-ink-soft)" }}>
+                    {st.fullDays} full · {st.halfDays} half · {st.nightShifts} night
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {details?.map((d) => (
             <div key={d.id} className="row" style={{ marginTop: 10, fontSize: 14 }}>
               <span>{d.employeeName}</span>
