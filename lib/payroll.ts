@@ -1,4 +1,4 @@
-import { db, type AttendanceRecord, type DayType, type Employee, type WorkPlace } from "./db";
+import { db, type AttendanceRecord, type DayType, type Employee, type NightType, type WorkPlace } from "./db";
 import { toDateStr, weekDays } from "./date";
 
 // Day-shift pay. Saturday is treated the same as any other day now (no
@@ -16,11 +16,20 @@ export function amountForDay(dayType: DayType, dailyRate: number): number {
   }
 }
 
-// Night shift pays a flat half day's rate, on top of whatever the day-shift
-// paid, and is available on any working day (Mon-Sat) — and may be at a
-// DIFFERENT site than the day shift.
-export function nightShiftPay(nightShift: boolean | undefined, dailyRate: number): number {
-  return nightShift ? dailyRate / 2 : 0;
+// Night shift pays ON TOP of whatever the day-shift paid, and is available on
+// any working day (Mon-Sat), possibly at a DIFFERENT site than the day shift.
+// HALF (evening) = half a day's rate. FULL (worked until midnight) = a full
+// day's rate, since it's substantially more hours than the half-night shift.
+export function nightShiftPay(nightType: NightType | undefined, dailyRate: number): number {
+  switch (nightType) {
+    case "HALF":
+      return dailyRate / 2;
+    case "FULL":
+      return dailyRate;
+    case "NONE":
+    default:
+      return 0;
+  }
 }
 
 export interface EmployeeWeekSummary {
@@ -28,7 +37,8 @@ export interface EmployeeWeekSummary {
   fullDays: number;
   halfDays: number;
   absentDays: number;
-  nightShiftDays: number;
+  nightHalfDays: number;
+  nightFullDays: number;
   nightShiftAmount: number;
   totalAmount: number;
   records: AttendanceRecord[];
@@ -52,7 +62,8 @@ export async function computeEmployeeWeek(
   let fullDays = 0;
   let halfDays = 0;
   let absentDays = 0;
-  let nightShiftDays = 0;
+  let nightHalfDays = 0;
+  let nightFullDays = 0;
   let nightShiftAmount = 0;
   let totalAmount = 0;
 
@@ -64,9 +75,11 @@ export async function computeEmployeeWeek(
     else absentDays++;
     totalAmount += amountForDay(dayType, employee.dailyRate);
 
-    if (rec?.nightShift) {
-      nightShiftDays++;
-      const pay = nightShiftPay(true, employee.dailyRate);
+    const nightType = rec?.nightType ?? "NONE";
+    if (nightType !== "NONE") {
+      if (nightType === "FULL") nightFullDays++;
+      else nightHalfDays++;
+      const pay = nightShiftPay(nightType, employee.dailyRate);
       nightShiftAmount += pay;
       totalAmount += pay;
     }
@@ -77,7 +90,8 @@ export async function computeEmployeeWeek(
     fullDays,
     halfDays,
     absentDays,
-    nightShiftDays,
+    nightHalfDays,
+    nightFullDays,
     nightShiftAmount,
     totalAmount,
     records,
@@ -92,7 +106,8 @@ export interface SiteTotal {
   siteName: string;
   fullDays: number;
   halfDays: number;
-  nightShifts: number;
+  nightHalfDays: number;
+  nightFullDays: number;
   total: number;
 }
 
@@ -113,7 +128,15 @@ export function siteTotalsFromRecords(
   function ensure(id: number): SiteTotal {
     let s = bySite.get(id);
     if (!s) {
-      s = { siteId: id, siteName: names.get(id) ?? "Unknown site", fullDays: 0, halfDays: 0, nightShifts: 0, total: 0 };
+      s = {
+        siteId: id,
+        siteName: names.get(id) ?? "Unknown site",
+        fullDays: 0,
+        halfDays: 0,
+        nightHalfDays: 0,
+        nightFullDays: 0,
+        total: 0,
+      };
       bySite.set(id, s);
     }
     return s;
@@ -126,12 +149,14 @@ export function siteTotalsFromRecords(
       else s.halfDays++;
       s.total += amountForDay(rec.dayType, dailyRate);
     }
-    if (rec.nightShift) {
+    const nightType = rec.nightType ?? "NONE";
+    if (nightType !== "NONE") {
       const nightSiteId = rec.nightSiteId ?? rec.daySiteId;
       if (nightSiteId) {
         const s = ensure(nightSiteId);
-        s.nightShifts++;
-        s.total += nightShiftPay(true, dailyRate);
+        if (nightType === "FULL") s.nightFullDays++;
+        else s.nightHalfDays++;
+        s.total += nightShiftPay(nightType, dailyRate);
       }
     }
   }

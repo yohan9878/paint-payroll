@@ -9,7 +9,8 @@ export interface PayslipData {
   fullDays: number;
   halfDays: number;
   absentDays: number;
-  nightShiftDays?: number;
+  nightHalfDays?: number;
+  nightFullDays?: number;
   nightShiftAmount?: number;
   totalAmount: number;
   sitesWorked?: string;
@@ -65,13 +66,12 @@ export function buildPayslipDoc(
   const rightX = pageWidth - marginX;
   let y = 50;
 
-  const logoSize = 54;
+  const logoSize = 36;
   let textX = marginX;
 
-  
   if (logoImg) {
     try {
-      pdf.addImage(logoImg, "JPEG", marginX, y - logoSize + 20, logoSize, logoSize);
+      pdf.addImage(logoImg, "JPEG", marginX, y - logoSize + 12, logoSize, logoSize);
       textX = marginX + logoSize + 12;
     } catch {
       // If the image can't be embedded for any reason, just fall back to text-only header.
@@ -80,17 +80,17 @@ export function buildPayslipDoc(
   }
 
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(20);
-  pdf.text(data.companyName ?? "Doctor Paint", textX, 35);
+  pdf.setFontSize(16);
+  pdf.text(data.companyName ?? "Doctor Paint", textX, y);
 
-  y += 5;
+  y += 20;
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(14);
+  pdf.setFontSize(10);
   pdf.setTextColor(110);
   pdf.text("Weekly Payroll Slip", textX, y);
   pdf.setTextColor(0);
 
-  y += 26;
+  y += 18;
   pdf.setDrawColor(210);
   pdf.line(marginX, y, rightX, y);
 
@@ -135,11 +135,19 @@ export function buildPayslipDoc(
     [`Absent days (${data.absentDays})`, "-", money(0)],
   ];
 
-  if (data.nightShiftDays && data.nightShiftDays > 0) {
+  if (data.nightHalfDays && data.nightHalfDays > 0) {
     rows.push([
-      `Night shifts (${data.nightShiftDays})`,
+      `Half nights (${data.nightHalfDays})`,
       money(data.dailyRate / 2),
-      money(data.nightShiftAmount ?? data.nightShiftDays * (data.dailyRate / 2)),
+      money(data.nightHalfDays * (data.dailyRate / 2)),
+    ]);
+  }
+
+  if (data.nightFullDays && data.nightFullDays > 0) {
+    rows.push([
+      `Full nights (${data.nightFullDays})`,
+      money(data.dailyRate),
+      money(data.nightFullDays * data.dailyRate),
     ]);
   }
 

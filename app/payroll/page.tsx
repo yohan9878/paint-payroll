@@ -52,7 +52,8 @@ export default function PayrollPage() {
         fullDays: s.fullDays,
         halfDays: s.halfDays,
         absentDays: s.absentDays,
-        nightShiftDays: s.nightShiftDays,
+        nightHalfDays: s.nightHalfDays,
+        nightFullDays: s.nightFullDays,
         nightShiftAmount: s.nightShiftAmount,
         totalAmount: s.totalAmount,
       });
@@ -65,7 +66,7 @@ export default function PayrollPage() {
     const ids = new Set<number>();
     for (const r of s.records) {
       if (r.dayType !== "ABSENT" && r.daySiteId) ids.add(r.daySiteId);
-      if (r.nightShift) ids.add(r.nightSiteId ?? r.daySiteId);
+      if (r.nightType && r.nightType !== "NONE") ids.add(r.nightSiteId ?? r.daySiteId);
     }
     if (ids.size === 0) return "No days worked";
     return Array.from(ids).map((id) => siteName(id)).filter(Boolean).join(", ");
@@ -130,7 +131,7 @@ export default function PayrollPage() {
                   <span className="money">Rs {st.total.toLocaleString()}</span>
                 </div>
                 <div style={{ fontSize: 11, color: "var(--color-ink-soft)", marginTop: 2 }}>
-                  {st.fullDays} full · {st.halfDays} half · {st.nightShifts} night
+                  {st.fullDays} full · {st.halfDays} half · {st.nightHalfDays} half-night · {st.nightFullDays} full-night
                 </div>
               </div>
             ))}
@@ -146,7 +147,8 @@ export default function PayrollPage() {
                 <span><span className="swatch full" style={{ width: 14, height: 14, borderRadius: 4, display: "inline-block", verticalAlign: "middle", marginRight: 4 }} />{s.fullDays} full</span>
                 <span><span className="swatch half" style={{ width: 14, height: 14, borderRadius: 4, display: "inline-block", verticalAlign: "middle", marginRight: 4 }} />{s.halfDays} half</span>
                 <span><span className="swatch absent" style={{ width: 14, height: 14, borderRadius: 4, display: "inline-block", verticalAlign: "middle", marginRight: 4 }} />{s.absentDays} absent</span>
-                <span><span className="swatch night" style={{ width: 14, height: 14, borderRadius: 4, display: "inline-block", verticalAlign: "middle", marginRight: 4 }} />{s.nightShiftDays} night</span>
+                <span><span className="swatch night" style={{ width: 14, height: 14, borderRadius: 4, display: "inline-block", verticalAlign: "middle", marginRight: 4, opacity: 0.6 }} />{s.nightHalfDays} half-night</span>
+                <span><span className="swatch night" style={{ width: 14, height: 14, borderRadius: 4, display: "inline-block", verticalAlign: "middle", marginRight: 4 }} />{s.nightFullDays} full-night</span>
               </div>
               <div style={{ fontSize: 11, color: "var(--color-ink-soft)", marginTop: 6 }}>
                 Sites worked: {sitesWorked(s)}
@@ -216,7 +218,7 @@ function PastRunCard({
       const workedIds = new Set<number>();
       for (const r of records) {
         if (r.dayType !== "ABSENT" && r.daySiteId) workedIds.add(r.daySiteId);
-        if (r.nightShift) workedIds.add(r.nightSiteId ?? r.daySiteId);
+        if (r.nightType && r.nightType !== "NONE") workedIds.add(r.nightSiteId ?? r.daySiteId);
         entries.push({ record: r, dailyRate: d.dailyRate });
       }
       namesByEmployee[d.employeeId] = Array.from(workedIds).map((id) => workplaces.find((w) => w.id === id)?.name).filter(Boolean).join(", ") || "—";
@@ -246,7 +248,8 @@ function PastRunCard({
       fullDays: d.fullDays,
       halfDays: d.halfDays,
       absentDays: d.absentDays,
-      nightShiftDays: d.nightShiftDays,
+      nightHalfDays: d.nightHalfDays,
+      nightFullDays: d.nightFullDays,
       nightShiftAmount: d.nightShiftAmount,
       totalAmount: d.totalAmount,
       sitesWorked: siteData?.namesByEmployee[d.employeeId],
@@ -282,7 +285,7 @@ function PastRunCard({
                     <span className="tabular">Rs {st.total.toLocaleString()}</span>
                   </div>
                   <div style={{ fontSize: 10, color: "var(--color-ink-soft)" }}>
-                    {st.fullDays} full · {st.halfDays} half · {st.nightShifts} night
+                    {st.fullDays} full · {st.halfDays} half · {st.nightHalfDays} half-night · {st.nightFullDays} full-night
                   </div>
                 </div>
               ))}
