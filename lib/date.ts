@@ -47,7 +47,7 @@ export function weekDays(saturday: Date): Date[] {
 }
 
 export function formatNice(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
 }
 
 export function isSaturday(d: Date): boolean {

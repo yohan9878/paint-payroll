@@ -19,19 +19,21 @@ export default function Home() {
 
   return (
     <div className="page">
-      <div className="eyebrow">{formatNice(todayDate)}</div>
+      <div className="eyebrow" style={{fontSize: 20, fontWeight:"bold", textAlign:"center"}}>{formatNice(todayDate)}</div>
       <img
         src="/logo.jpg"
         alt="Doctor Paint"
         style={{
-          height: 96,
-          width: 96,
+          height: 200,
+          width: 200,
           borderRadius: "var(--radius-md)",
-          marginBottom: 10,
+          marginTop: 20,
+          marginBottom: 20,
+          margin:"auto",
           display: "block",
         }}
       />
-      <p style={{ color: "var(--color-ink-soft)", marginTop: 0 }}>
+      <p style={{ color: "var(--color-ink-soft)", margin: 10, textAlign:"center" }}>
         {saturdayToday
           ? "It's Saturday — wrap up attendance (don't forget any night shifts), then generate this week's payroll."
           : "Mark today's attendance for each work site."}
