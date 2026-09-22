@@ -20,6 +20,8 @@ export interface Employee {
 }
 
 export type DayType = "FULL" | "HALF" | "ABSENT";
+export type NightType = "NONE" | "HALF" | "FULL"; // HALF = evening night shift (half day's pay);
+                                                    // FULL = worked until midnight (a full day's pay)
 
 export interface AttendanceRecord {
   id?: number;
@@ -27,8 +29,8 @@ export interface AttendanceRecord {
   daySiteId: number; // site worked for the DAY shift (Full/Half/Absent) that day
   date: string; // YYYY-MM-DD
   dayType: DayType; // day-shift status
-  nightShift?: boolean; // worked a night shift that same day — pays a half day
-                         // on top of the day-shift amount, on ANY day including Saturday.
+  nightType?: NightType; // night-shift status that same day — paid ON TOP of the
+                          // day-shift amount, on ANY day including Saturday.
   nightSiteId?: number; // site worked for the NIGHT shift — independent of daySiteId,
                          // since someone can work days at one site and nights at another.
 }
@@ -49,8 +51,9 @@ export interface PayrollDetail {
   fullDays: number;
   halfDays: number;
   absentDays: number;
-  nightShiftDays: number; // count of night shifts worked that week
-  nightShiftAmount: number; // total pay from night shifts (each = half a day's rate)
+  nightHalfDays: number; // count of half-night shifts worked that week
+  nightFullDays: number; // count of full-night shifts (until midnight) worked that week
+  nightShiftAmount: number; // total pay from all night shifts combined
   totalAmount: number; // day-shift pay + night-shift pay combined
 }
 
@@ -108,6 +111,42 @@ class PayrollDB extends Dexie {
                 rec.nightSiteId = rec.workPlaceId;
               }
               delete rec.workPlaceId;
+            }
+          });
+      });
+
+    // v4: night shift now has two tiers — HALF (evening) and FULL (worked
+    // until midnight, pays a full day's rate instead of half). Existing
+    // records only ever had a boolean nightShift, which always meant the
+    // half-night rate — migrated straight across as nightType: "HALF".
+    // Saved payroll details are migrated the same way: their old
+    // nightShiftDays count becomes nightHalfDays, with nightFullDays at 0.
+    this.version(4)
+      .stores({
+        workplaces: "++id, name",
+        employees: "++id, workPlaceId, name, active",
+        attendance: "++id, employeeId, daySiteId, date, [employeeId+date]",
+        payrollRuns: "++id, weekStart, weekEnd",
+        payrollDetails: "++id, payrollRunId, employeeId",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("attendance")
+          .toCollection()
+          .modify((rec: any) => {
+            if (rec.nightType === undefined) {
+              rec.nightType = rec.nightShift ? "HALF" : "NONE";
+            }
+            delete rec.nightShift;
+          });
+        await tx
+          .table("payrollDetails")
+          .toCollection()
+          .modify((rec: any) => {
+            if (rec.nightHalfDays === undefined) {
+              rec.nightHalfDays = rec.nightShiftDays ?? 0;
+              rec.nightFullDays = 0;
+              delete rec.nightShiftDays;
             }
           });
       });

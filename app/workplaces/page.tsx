@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
+import { BuildingComplex } from "lucide-react";
 
 export default function WorkPlacesPage() {
   const workplaces = useLiveQuery(() => db.workplaces.orderBy("name").toArray(), []);
@@ -35,7 +36,7 @@ export default function WorkPlacesPage() {
 
   return (
     <div className="page">
-      <div className="eyebrow">Work sites</div>
+      <div className="eyebrow"><BuildingComplex color="var(--color-ink)" size={50}/></div>
       <h1>Sites</h1>
 
       <div className="card">
