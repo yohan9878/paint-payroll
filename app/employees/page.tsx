@@ -72,7 +72,7 @@ export default function EmployeesPage() {
   return (
     <div className="page">
       <div className="eyebrow"><UserGroup color="var(--color-ink)" size={50}/></div>
-      <h1>Employee</h1>
+      <h1>Employees</h1>
 
       <div className="card">
         <div className="field">

@@ -78,7 +78,7 @@ export default function PayrollPage() {
   if ((workplaces?.length ?? 0) === 0) {
     return (
       <div className="page">
-        <div className="eyebrow">Payroll</div>
+        <div className="eyebrow"><Receipt color="var(--color-ink)" size={50}/></div>
         <h1>Payroll</h1>
         <div className="empty-state">
           Add a work site first.
