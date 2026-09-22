@@ -12,6 +12,7 @@ import {
 } from "@/lib/date";
 import { amountForDay, nightShiftPay } from "@/lib/payroll";
 import Link from "next/link";
+import { Flag } from "lucide-react";
 
 const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const CYCLE: (DayType | null)[] = [null, "FULL", "HALF", "ABSENT"];
@@ -137,7 +138,7 @@ export default function AttendancePage() {
   if ((workplaces?.length ?? 0) === 0) {
     return (
       <div className="page">
-        <div className="eyebrow">Attendance</div>
+        <div className="eyebrow"><Flag color="var(--color-ink)" size={50}/></div>
         <h1>Attendance</h1>
         <div className="empty-state">
           Add a work site and employees first.
@@ -153,7 +154,7 @@ export default function AttendancePage() {
 
   return (
     <div className="page">
-      <div className="eyebrow">Attendance</div>
+      <div className="eyebrow"><Flag color="var(--color-ink)" size={50}/></div>
       <h1>Mark attendance</h1>
 
       <div className="card">
@@ -353,9 +354,9 @@ export default function AttendancePage() {
                               color: nightType !== "NONE" ? "white" : "var(--color-ink-soft)",
                               background: nightType !== "NONE" ? "var(--color-night)" : "var(--color-bg)",
                               opacity: nightType === "HALF" ? 0.75 : 1,
-                              border: nightType === "NONE" ? "1px solid var(--color-border)" : "none",
+                              border: nightType === "NONE" ? "1px solid var(--color-border)" : "1px none",
                               borderRadius: 4,
-                              marginTop: 2,
+                              marginTop: 4,
                               padding: "1px 0",
                               cursor: "pointer",
                             }}

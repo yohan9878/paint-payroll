@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "@/lib/db";
 import Link from "next/link";
+import { UserGroup } from "lucide-react";
 
 export default function EmployeesPage() {
   const workplaces = useLiveQuery(() => db.workplaces.orderBy("name").toArray(), []);
@@ -54,7 +55,7 @@ export default function EmployeesPage() {
   if ((workplaces?.length ?? 0) === 0) {
     return (
       <div className="page">
-        <div className="eyebrow">Team</div>
+        <div className="eyebrow"><UserGroup color="var(--color-ink)" size={50}/></div>
         <h1>Employees</h1>
         <div className="empty-state">
           Add a work site first.
@@ -70,7 +71,7 @@ export default function EmployeesPage() {
 
   return (
     <div className="page">
-      <div className="eyebrow">Team</div>
+      <div className="eyebrow"><UserGroup color="var(--color-ink)" size={50}/></div>
       <h1>Employees</h1>
 
       <div className="card">

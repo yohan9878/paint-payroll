@@ -7,6 +7,7 @@ import { toDateStr, weekEndingSaturday, formatNice, weekRangeFromSaturday } from
 import { computeEmployeeWeek, siteTotalsFromSummaries, siteTotalsFromRecords, type EmployeeWeekSummary, type SiteTotal } from "@/lib/payroll";
 import { downloadPayslip, downloadAllPayslips, type PayslipData } from "@/lib/payslip";
 import Link from "next/link";
+import { Receipt } from "lucide-react";
 
 export default function PayrollPage() {
   const workplaces = useLiveQuery(() => db.workplaces.orderBy("name").toArray(), []);
@@ -93,7 +94,7 @@ export default function PayrollPage() {
 
   return (
     <div className="page">
-      <div className="eyebrow">Payroll</div>
+      <div className="eyebrow"><Receipt color="var(--color-ink)" size={50}/></div>
       <h1>Weekly payroll</h1>
       <p style={{ color: "var(--color-ink-soft)", fontSize: 13, marginTop: -6 }}>
         Covers every active employee for the week, regardless of which site(s) they worked.
